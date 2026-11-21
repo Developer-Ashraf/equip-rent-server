@@ -1,0 +1,197 @@
+import { MongoClient } from 'mongodb';
+import 'dotenv/config';
+
+const uri = process.env.MONGODB_URI;
+const client = new MongoClient(uri);
+
+const initialEquipments = [
+  {
+    name: 'Caterpillar 320 Hydraulic Excavator',
+    description: 'High-performance hydraulic excavator ideal for heavy construction, digging trenches, and demolition work with advanced power modes.',
+    category: 'Construction Equipment',
+    rentalPrice: 450,
+    rentalType: 'Daily',
+    location: 'Dhaka, Bangladesh',
+    availableQuantity: 3,
+    condition: 'Excellent',
+    brand: 'Caterpillar',
+    model: 'CAT 320 GC',
+    image: 'https://images.unsplash.com/photo-1579829366248-204fe8413f31?w=800&auto=format&fit=crop&q=80',
+    terms: 'Valid operator license required. Fuel costs to be borne by renter. 24/7 technical support included.',
+    status: 'approved',
+    ownerId: '67401a000000000000000001',
+    ownerName: 'HeavyMachinery Rentals Ltd.',
+    ownerEmail: 'owner@heavymachinery.com',
+    ownerPhoto: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&auto=format&fit=crop&q=80',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    name: 'Sony FX3 Cinema Line Full-Frame Camera',
+    description: 'Compact cinema camera with 4K 120p, dual base ISO, 15+ stops dynamic range, and top handle for professional film productions.',
+    category: 'Photography Equipment',
+    rentalPrice: 85,
+    rentalType: 'Daily',
+    location: 'Chittagong, Bangladesh',
+    availableQuantity: 5,
+    condition: 'Like New',
+    brand: 'Sony',
+    model: 'ILME-FX3',
+    image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=80',
+    terms: 'Security deposit required. Lens package available upon request. Cleaning kit included.',
+    status: 'approved',
+    ownerId: '67401a000000000000000002',
+    ownerName: 'Apex Studio Gear',
+    ownerEmail: 'apexstudio@gear.com',
+    ownerPhoto: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    name: 'John Deere 5075E Utility Tractor',
+    description: '75 HP 4WD heavy duty tractor designed for plowing, rotary tilling, harvesting, and heavy haulage across agricultural fields.',
+    category: 'Agriculture Equipment',
+    rentalPrice: 220,
+    rentalType: 'Daily',
+    location: 'Rajshahi, Bangladesh',
+    availableQuantity: 2,
+    condition: 'Good',
+    brand: 'John Deere',
+    model: '5075E',
+    image: 'https://images.unsplash.com/photo-1592878904946-b3cd8ae243d0?w=800&auto=format&fit=crop&q=80',
+    terms: 'Operator training mandatory. Delivery to farm gate available at nominal fee.',
+    status: 'approved',
+    ownerId: '67401a000000000000000001',
+    ownerName: 'HeavyMachinery Rentals Ltd.',
+    ownerEmail: 'owner@heavymachinery.com',
+    ownerPhoto: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&auto=format&fit=crop&q=80',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    name: 'JBL VRX932LA Concert Sound System',
+    description: 'Line array sound system package with dual subwoofers, digital mixing console, wireless microphones, and acoustic rigging.',
+    category: 'Event Equipment',
+    rentalPrice: 350,
+    rentalType: 'Daily',
+    location: 'Dhaka, Bangladesh',
+    availableQuantity: 4,
+    condition: 'Excellent',
+    brand: 'JBL Professional',
+    model: 'VRX932LA-1',
+    image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
+    terms: 'Sound engineer provided upon request. Safe indoor/covered outdoor use only.',
+    status: 'approved',
+    ownerId: '67401a000000000000000003',
+    ownerName: 'SonicWave Productions',
+    ownerEmail: 'rentals@sonicwave.com',
+    ownerPhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    name: 'Toyota Dyna 3-Ton Cargo Moving Truck',
+    description: 'Reliable diesel commercial flatbed truck with hydraulic tailgate lift, suitable for moving bulky goods and industrial cargo.',
+    category: 'Vehicles & Transportation',
+    rentalPrice: 150,
+    rentalType: 'Daily',
+    location: 'Gazipur, Bangladesh',
+    availableQuantity: 6,
+    condition: 'Good',
+    brand: 'Toyota',
+    model: 'Dyna 300 Series',
+    image: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=800&auto=format&fit=crop&q=80',
+    terms: 'Commercial driving license required. Toll charges and diesel excluded.',
+    status: 'approved',
+    ownerId: '67401a000000000000000001',
+    ownerName: 'HeavyMachinery Rentals Ltd.',
+    ownerEmail: 'owner@heavymachinery.com',
+    ownerPhoto: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&auto=format&fit=crop&q=80',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    name: 'DJI Matrice 300 RTK Industrial Drone',
+    description: 'Next-generation industrial flight platform with 55 min flight time, thermal and zoom cameras for surveying and aerial inspection.',
+    category: 'Electronics',
+    rentalPrice: 195,
+    rentalType: 'Daily',
+    location: 'Sylhet, Bangladesh',
+    availableQuantity: 3,
+    condition: 'Like New',
+    brand: 'DJI',
+    model: 'M300 RTK',
+    image: 'https://images.unsplash.com/photo-1527977966376-1c8408f9f108?w=800&auto=format&fit=crop&q=80',
+    terms: 'Certified drone pilot certification required. Strict no-fly zone compliance.',
+    status: 'approved',
+    ownerId: '67401a000000000000000002',
+    ownerName: 'Apex Studio Gear',
+    ownerEmail: 'apexstudio@gear.com',
+    ownerPhoto: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    name: 'Bobcat S76 Skid-Steer Loader',
+    description: 'Compact radius lift path skid-steer loader designed for construction, trenching, material handling, and tough terrain operations.',
+    category: 'Construction Equipment',
+    rentalPrice: 280,
+    rentalType: 'Daily',
+    location: 'Narayanganj, Bangladesh',
+    availableQuantity: 2,
+    condition: 'Excellent',
+    brand: 'Bobcat',
+    model: 'S76 M-Series',
+    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&auto=format&fit=crop&q=80',
+    terms: 'Experienced operator only. Includes bucket attachment. Hydraulic breaker available.',
+    status: 'approved',
+    ownerId: '67401a000000000000000001',
+    ownerName: 'HeavyMachinery Rentals Ltd.',
+    ownerEmail: 'owner@heavymachinery.com',
+    ownerPhoto: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&auto=format&fit=crop&q=80',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    name: 'Aputure 600d Pro LED Video Light Kit',
+    description: 'Point-source daylight LED fixture with bowens mount, hyper reflector, weather resistance, and wireless app control.',
+    category: 'Photography Equipment',
+    rentalPrice: 45,
+    rentalType: 'Daily',
+    location: 'Dhaka, Bangladesh',
+    availableQuantity: 8,
+    condition: 'Excellent',
+    brand: 'Aputure',
+    model: 'LS 600d Pro',
+    image: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=800&auto=format&fit=crop&q=80',
+    terms: 'Light stand and power cables included. Softbox available upon request.',
+    status: 'approved',
+    ownerId: '67401a000000000000000002',
+    ownerName: 'Apex Studio Gear',
+    ownerEmail: 'apexstudio@gear.com',
+    ownerPhoto: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+];
+
+async function seed() {
+  try {
+    await client.connect();
+    const db = client.db(process.env.DB_NAME || 'equip_rent_db');
+    const equipmentsCol = db.collection('equipments');
+
+    const count = await equipmentsCol.countDocuments();
+    if (count === 0) {
+      await equipmentsCol.insertMany(initialEquipments);
+      console.log('Successfully seeded 8 initial approved equipment items.');
+    } else {
+      console.log(`Database already has ${count} equipments. Skipping seed.`);
+    }
+  } catch (err) {
+    console.error('Seed error:', err);
+  } finally {
+    await client.close();
+  }
+}
+seed();
