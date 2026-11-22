@@ -197,8 +197,8 @@ app.get('/api/equipments', async (req, res) => {
   }
 });
 
-// 3. Single Equipment Details (Private Route Data)
-app.get('/api/equipments/:id', verifyToken, async (req, res) => {
+// 3. Single Equipment Details
+app.get('/api/equipments/:id', async (req, res) => {
   try {
     const id = req.params.id;
     let query;
@@ -211,7 +211,16 @@ app.get('/api/equipments/:id', verifyToken, async (req, res) => {
     if (!result) {
       return res.status(404).send({ message: 'Equipment not found' });
     }
-    res.send(result);
+    const formatted = {
+      ...result,
+      price: result.price ?? result.rentalPrice ?? 0,
+      rentalPrice: result.rentalPrice ?? result.price ?? 0,
+      quantity: result.quantity ?? result.availableQuantity ?? 1,
+      availableQuantity: result.availableQuantity ?? result.quantity ?? 1,
+      rentalTerms: result.rentalTerms ?? result.terms ?? '',
+      terms: result.terms ?? result.rentalTerms ?? '',
+    };
+    res.send({ equipment: formatted, ...formatted });
   } catch (error) {
     res.status(500).send({ message: 'Failed to fetch equipment details', error: error.message });
   }
