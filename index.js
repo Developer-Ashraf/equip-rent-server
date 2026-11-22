@@ -159,9 +159,16 @@ app.get('/api/equipments/featured', async (req, res) => {
 // 2. All Approved Equipment with Search, Filter & Sort (Challenge 1)
 app.get('/api/equipments', async (req, res) => {
   try {
-    const { search, category, rentalType, availability, sort, page = 1, limit = 12 } = req.query;
+    const { search, category, rentalType, availability, sort, status, page = 1, limit = 12 } = req.query;
 
-    const query = { status: 'approved' };
+    const query = {};
+    if (status && status === 'all') {
+      // Admin requests all statuses (pending, approved, rejected)
+    } else if (status) {
+      query.status = status;
+    } else {
+      query.status = 'approved'; // Default public only approved
+    }
 
     // Search by Name or Location
     if (search) {
@@ -259,7 +266,7 @@ app.post('/api/equipments', verifyToken, verifyOwner, async (req, res) => {
       price: rentalPrice,
       availableQuantity,
       quantity: availableQuantity,
-      status: 'approved', // Auto-approved for verified owners
+      status: req.user.role === 'admin' ? 'approved' : 'pending', // Pending approval by Admin per requirement
       ownerId: req.user._id.toString(),
       ownerName: req.user.name,
       ownerEmail: req.user.email,
@@ -350,6 +357,35 @@ app.put('/api/equipments/:id', verifyToken, async (req, res) => {
     res.status(500).send({ message: 'Failed to update equipment', error: error.message });
   }
 });
+
+// Admin: Approve / Reject Equipment Status
+const updateEquipmentStatus = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { status } = req.body;
+    if (!['pending', 'approved', 'rejected'].includes(status)) {
+      return res.status(400).send({ message: 'Invalid equipment status. Must be pending, approved, or rejected.' });
+    }
+
+    let query;
+    try {
+      query = { _id: new ObjectId(id) };
+    } catch {
+      query = { _id: id };
+    }
+
+    const result = await equipments.updateOne(query, {
+      $set: { status, updatedAt: new Date() }
+    });
+
+    res.send({ success: true, message: `Equipment status updated to ${status}`, result });
+  } catch (error) {
+    res.status(500).send({ message: 'Failed to update equipment status', error: error.message });
+  }
+};
+
+app.put('/api/equipments/:id/status', verifyToken, verifyAdmin, updateEquipmentStatus);
+app.patch('/api/equipments/:id/status', verifyToken, verifyAdmin, updateEquipmentStatus);
 
 // 7. Owner/Admin: Delete Equipment
 app.delete('/api/equipments/:id', verifyToken, async (req, res) => {
