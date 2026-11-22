@@ -10,11 +10,18 @@ const port = process.env.PORT || 5000;
 // Middlewares
 app.use(express.json());
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    process.env.CLIENT_URL,
-    'https://equip-rent-client.vercel.app'
-  ].filter(Boolean),
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.includes('vercel.app') ||
+      (process.env.CLIENT_URL && origin.includes(process.env.CLIENT_URL))
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
   credentials: true,
 }));
 
