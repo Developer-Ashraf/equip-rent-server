@@ -422,19 +422,30 @@ app.delete('/api/favorites/:id', verifyToken, async (req, res) => {
 // 1. Create Rental Booking Checkout Session
 app.post('/api/bookings/create-checkout-session', verifyToken, async (req, res) => {
   try {
-    const {
-      equipmentId,
-      equipmentName,
-      equipmentImage,
-      rentalStartDate,
-      rentalEndDate,
-      requiredQuantity,
-      contactNumber,
-      deliveryAddress,
-      additionalNotes,
-      rentalPrice,
-      rentalType,
-    } = req.body;
+    const equipmentId = req.body.equipmentId;
+    const rentalStartDate = req.body.rentalStartDate || req.body.startDate;
+    const rentalEndDate = req.body.rentalEndDate || req.body.endDate;
+    const requiredQuantity = Number(req.body.requiredQuantity || req.body.quantity || 1);
+    const contactNumber = req.body.contactNumber || req.body.phone || '';
+    const deliveryAddress = req.body.deliveryAddress || '';
+    const additionalNotes = req.body.additionalNotes || req.body.notes || '';
+
+    // Fetch equipment to get price, type, and owner information
+    let eqQuery;
+    try {
+      eqQuery = { _id: new ObjectId(equipmentId) };
+    } catch {
+      eqQuery = { _id: equipmentId };
+    }
+    const equipment = await equipments.findOne(eqQuery);
+    if (!equipment) {
+      return res.status(404).send({ message: 'Equipment not found' });
+    }
+
+    const equipmentName = req.body.equipmentName || equipment.name;
+    const equipmentImage = req.body.equipmentImage || equipment.image;
+    const rentalPrice = Number(req.body.rentalPrice || equipment.price || equipment.rentalPrice || 0);
+    const rentalType = req.body.rentalType || equipment.rentalType || 'Daily';
 
     // Calculate duration in days
     const start = new Date(rentalStartDate);
@@ -449,18 +460,6 @@ app.post('/api/bookings/create-checkout-session', verifyToken, async (req, res) 
     } else if (rentalType === 'Monthly') {
       const months = Math.max(1, Math.ceil(diffDays / 30));
       totalAmount = rentalPrice * requiredQuantity * months;
-    }
-
-    // Fetch equipment to get owner information
-    let eqQuery;
-    try {
-      eqQuery = { _id: new ObjectId(equipmentId) };
-    } catch {
-      eqQuery = { _id: equipmentId };
-    }
-    const equipment = await equipments.findOne(eqQuery);
-    if (!equipment) {
-      return res.status(404).send({ message: 'Equipment not found' });
     }
 
     if (equipment.availableQuantity < requiredQuantity) {
