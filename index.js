@@ -652,9 +652,29 @@ app.post('/api/payments/verify', async (req, res) => {
 app.get('/api/customer/my-rentals', verifyToken, async (req, res) => {
   try {
     const customerId = req.user._id.toString();
-    const result = await bookings.find({ customerId }).sort({ bookingDate: -1 }).toArray();
-    res.send(result);
+    const customerEmail = req.user.email;
+    const query = {
+      $or: [
+        { customerId },
+        { customerEmail },
+      ]
+    };
+    try {
+      query.$or.push({ customerId: new ObjectId(customerId) });
+    } catch {}
+
+    const result = await bookings.find(query).sort({ bookingDate: -1, createdAt: -1 }).toArray();
+
+    const normalized = result.map(b => ({
+      ...b,
+      startDate: b.rentalStartDate || b.startDate,
+      endDate: b.rentalEndDate || b.endDate,
+      quantity: b.requiredQuantity || b.quantity || 1,
+    }));
+
+    res.send({ rentals: normalized, items: normalized });
   } catch (error) {
+    console.error('Failed to fetch rentals:', error);
     res.status(500).send({ message: 'Failed to fetch rentals', error: error.message });
   }
 });
@@ -663,9 +683,29 @@ app.get('/api/customer/my-rentals', verifyToken, async (req, res) => {
 app.get('/api/owner/my-rentals', verifyToken, verifyOwner, async (req, res) => {
   try {
     const ownerId = req.user._id.toString();
-    const result = await bookings.find({ ownerId }).sort({ bookingDate: -1 }).toArray();
-    res.send(result);
+    const ownerEmail = req.user.email;
+    const query = {
+      $or: [
+        { ownerId },
+        { ownerEmail },
+      ]
+    };
+    try {
+      query.$or.push({ ownerId: new ObjectId(ownerId) });
+    } catch {}
+
+    const result = await bookings.find(query).sort({ bookingDate: -1, createdAt: -1 }).toArray();
+
+    const normalized = result.map(b => ({
+      ...b,
+      startDate: b.rentalStartDate || b.startDate,
+      endDate: b.rentalEndDate || b.endDate,
+      quantity: b.requiredQuantity || b.quantity || 1,
+    }));
+
+    res.send({ rentals: normalized, items: normalized });
   } catch (error) {
+    console.error('Failed to fetch owner equipment rentals:', error);
     res.status(500).send({ message: 'Failed to fetch owner equipment rentals', error: error.message });
   }
 });
@@ -673,9 +713,18 @@ app.get('/api/owner/my-rentals', verifyToken, verifyOwner, async (req, res) => {
 // 5. Admin: All Rentals
 app.get('/api/admin/all-rentals', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    const result = await bookings.find({}).sort({ bookingDate: -1 }).toArray();
-    res.send(result);
+    const result = await bookings.find({}).sort({ bookingDate: -1, createdAt: -1 }).toArray();
+
+    const normalized = result.map(b => ({
+      ...b,
+      startDate: b.rentalStartDate || b.startDate,
+      endDate: b.rentalEndDate || b.endDate,
+      quantity: b.requiredQuantity || b.quantity || 1,
+    }));
+
+    res.send({ rentals: normalized, items: normalized });
   } catch (error) {
+    console.error('Failed to fetch all rentals:', error);
     res.status(500).send({ message: 'Failed to fetch all rentals', error: error.message });
   }
 });
