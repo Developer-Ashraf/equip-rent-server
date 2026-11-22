@@ -794,14 +794,14 @@ app.get('/api/admin/all-rentals', verifyToken, verifyAdmin, async (req, res) => 
 app.get('/api/admin/users', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const result = await users.find({}).sort({ createdAt: -1 }).toArray();
-    res.send(result);
+    res.send({ users: result, items: result });
   } catch (error) {
     res.status(500).send({ message: 'Failed to fetch users', error: error.message });
   }
 });
 
 // 2. Admin: Update User Role (Customer, Owner, Admin)
-app.patch('/api/admin/users/:id/role', verifyToken, verifyAdmin, async (req, res) => {
+const updateUserRole = async (req, res) => {
   try {
     const id = req.params.id;
     const { role } = req.body;
@@ -819,11 +819,14 @@ app.patch('/api/admin/users/:id/role', verifyToken, verifyAdmin, async (req, res
     const result = await users.updateOne(query, {
       $set: { role, updatedAt: new Date() }
     });
-    res.send({ success: true, result });
+    res.send({ success: true, message: `User role updated to ${role}`, result });
   } catch (error) {
     res.status(500).send({ message: 'Failed to update user role', error: error.message });
   }
-});
+};
+
+app.put('/api/admin/users/:id/role', verifyToken, verifyAdmin, updateUserRole);
+app.patch('/api/admin/users/:id/role', verifyToken, verifyAdmin, updateUserRole);
 
 // 3. User Profile Update (Name, Image, Phone, Address)
 app.patch('/api/user/profile', verifyToken, async (req, res) => {
