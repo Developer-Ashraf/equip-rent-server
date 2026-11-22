@@ -514,7 +514,7 @@ app.post('/api/bookings/create-checkout-session', verifyToken, async (req, res) 
             product_data: {
               name: `Rental: ${equipmentName}`,
               description: `Rental Period: ${rentalStartDate} to ${rentalEndDate} (${diffDays} days, Qty: ${requiredQuantity})`,
-              images: equipmentImage ? [equipmentImage] : [],
+              ...(equipmentImage && equipmentImage.startsWith('http') && !equipmentImage.includes('localhost') ? { images: [equipmentImage] } : {}),
             },
             unit_amount: Math.round(totalAmount * 100), // amount in cents
           },
@@ -541,7 +541,7 @@ app.post('/api/bookings/create-checkout-session', verifyToken, async (req, res) 
 });
 
 // 2. Verify Stripe Payment & Update Booking + Payment Record
-app.post('/api/payments/verify', verifyToken, async (req, res) => {
+app.post('/api/payments/verify', async (req, res) => {
   try {
     const { sessionId, bookingId } = req.body;
 
@@ -549,25 +549,26 @@ app.post('/api/payments/verify', verifyToken, async (req, res) => {
       return res.status(400).send({ success: false, message: 'Session ID and Booking ID are required' });
     }
 
+    // Optional user from token if provided
+    let authUser = null;
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader) {
+        const token = authHeader.split(' ')[1];
+        if (token) {
+          const sessionDoc = await sessions.findOne({ token });
+          if (sessionDoc) {
+            authUser = await users.findOne({ _id: new ObjectId(sessionDoc.userId) }).catch(() => users.findOne({ _id: sessionDoc.userId }));
+          }
+        }
+      }
+    } catch {}
+
     // Check if already verified
     const existingPayment = await payments.findOne({ sessionId });
     if (existingPayment) {
-      return res.send({ success: true, message: 'Payment already verified', payment: existingPayment });
-    }
-
-    let paymentStatus = 'paid';
-    let paymentIntent = 'pi_mock_intent';
-    let customerEmail = req.user.email;
-
-    // If real Stripe session
-    if (!sessionId.startsWith('mock_session_')) {
-      const retrievedSession = await stripe.checkout.sessions.retrieve(sessionId);
-      if (retrievedSession.status !== 'complete' || retrievedSession.payment_status !== 'paid') {
-        return res.status(400).send({ success: false, message: 'Payment verification failed at Stripe' });
-      }
-      paymentStatus = retrievedSession.payment_status;
-      paymentIntent = retrievedSession.payment_intent;
-      customerEmail = retrievedSession.customer_email || req.user.email;
+      const existingBooking = await bookings.findOne({ _id: new ObjectId(bookingId) }).catch(() => bookings.findOne({ _id: bookingId }));
+      return res.send({ success: true, message: 'Payment already verified', payment: existingPayment, booking: existingBooking });
     }
 
     // Update booking document
@@ -581,6 +582,21 @@ app.post('/api/payments/verify', verifyToken, async (req, res) => {
     const booking = await bookings.findOne(bQuery);
     if (!booking) {
       return res.status(404).send({ success: false, message: 'Booking record not found' });
+    }
+
+    let paymentStatus = 'paid';
+    let paymentIntent = 'pi_mock_intent';
+    let customerEmail = authUser?.email || booking.customerEmail || 'customer@equiprent.com';
+
+    // If real Stripe session
+    if (!sessionId.startsWith('mock_session_')) {
+      const retrievedSession = await stripe.checkout.sessions.retrieve(sessionId);
+      if (retrievedSession.status !== 'complete' || retrievedSession.payment_status !== 'paid') {
+        return res.status(400).send({ success: false, message: 'Payment verification failed at Stripe' });
+      }
+      paymentStatus = retrievedSession.payment_status;
+      paymentIntent = retrievedSession.payment_intent;
+      customerEmail = retrievedSession.customer_email || booking.customerEmail || authUser?.email || 'customer@equiprent.com';
     }
 
     const updateBookingResult = await bookings.updateOne(bQuery, {
@@ -608,7 +624,7 @@ app.post('/api/payments/verify', verifyToken, async (req, res) => {
       bookingId,
       equipmentId: booking.equipmentId,
       equipmentName: booking.equipmentName,
-      customerId: req.user._id.toString(),
+      customerId: authUser?._id?.toString() || booking.customerId,
       customerEmail,
       amount: booking.totalAmount,
       paymentStatus,
@@ -617,11 +633,13 @@ app.post('/api/payments/verify', verifyToken, async (req, res) => {
     };
 
     const paymentResult = await payments.insertOne(paymentRecord);
+    const updatedBooking = await bookings.findOne(bQuery);
 
     res.send({
       success: true,
       message: 'Payment verified and booking confirmed successfully',
       bookingId,
+      booking: updatedBooking || { ...booking, paymentStatus: 'paid', bookingStatus: 'confirmed' },
       paymentId: paymentResult.insertedId,
     });
   } catch (error) {
