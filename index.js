@@ -883,7 +883,24 @@ app.get('/api/admin/analytics', verifyToken, verifyAdmin, async (req, res) => {
       { $limit: 6 }
     ]).toArray();
 
-    res.send({
+    // Role distribution
+    const roleStats = await users.aggregate([
+      { $group: { _id: '$role', count: { $sum: 1 } } }
+    ]).toArray();
+    const roleDistribution = roleStats.map(r => ({ name: r._id || 'user', value: r.count }));
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthlyData = monthlyStats.map(m => {
+      const parts = m._id ? m._id.split('-') : [];
+      const mIdx = parts[1] ? parseInt(parts[1], 10) - 1 : 0;
+      return {
+        month: monthNames[mIdx] || m._id,
+        revenue: m.revenue,
+        bookings: m.count,
+      };
+    });
+
+    const adminPayload = {
       totalUsers,
       totalEquipments,
       pendingEquipments,
@@ -892,8 +909,16 @@ app.get('/api/admin/analytics', verifyToken, verifyAdmin, async (req, res) => {
       completedRentals: paidBookings,
       totalRevenue,
       monthlyStats,
+      monthlyData,
+      roleDistribution,
+    };
+
+    res.send({
+      ...adminPayload,
+      analytics: adminPayload,
     });
   } catch (error) {
+    console.error('Failed to fetch admin analytics:', error);
     res.status(500).send({ message: 'Failed to fetch admin analytics', error: error.message });
   }
 });
@@ -902,43 +927,83 @@ app.get('/api/admin/analytics', verifyToken, verifyAdmin, async (req, res) => {
 app.get('/api/owner/analytics', verifyToken, verifyOwner, async (req, res) => {
   try {
     const ownerId = req.user._id.toString();
+    const ownerEmail = req.user.email;
+    const ownerMatch = {
+      $or: [
+        { ownerId },
+        { ownerEmail },
+      ]
+    };
+    try {
+      ownerMatch.$or.push({ ownerId: new ObjectId(ownerId) });
+    } catch {}
 
-    const totalListed = await equipments.countDocuments({ ownerId });
-    const pendingListed = await equipments.countDocuments({ ownerId, status: 'pending' });
-    const totalOwnerBookings = await bookings.countDocuments({ ownerId });
-    const completedRentals = await bookings.countDocuments({ ownerId, paymentStatus: 'paid' });
+    const totalListed = await equipments.countDocuments(ownerMatch);
+    const pendingListed = await equipments.countDocuments({ ...ownerMatch, status: 'pending' });
+    const totalOwnerBookings = await bookings.countDocuments(ownerMatch);
+    const completedRentals = await bookings.countDocuments({ ...ownerMatch, paymentStatus: 'paid' });
 
     // Owner Earnings
     const earningsPipeline = [
-      { $match: { ownerId, paymentStatus: 'paid' } },
+      { $match: { ...ownerMatch, paymentStatus: 'paid' } },
       { $group: { _id: null, totalEarnings: { $sum: '$totalAmount' } } }
     ];
     const earningsResult = await bookings.aggregate(earningsPipeline).toArray();
-    const totalEarnings = earningsResult[0]?.totalEarnings || 0;
+    const totalRevenue = earningsResult[0]?.totalEarnings || 0;
 
     // Monthly earnings
-    const monthlyEarnings = await bookings.aggregate([
-      { $match: { ownerId, paymentStatus: 'paid' } },
+    const monthlyEarningsRaw = await bookings.aggregate([
+      { $match: { ...ownerMatch, paymentStatus: 'paid' } },
       {
         $group: {
-          _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
-          earnings: { $sum: "$totalAmount" },
-          count: { $sum: 1 }
+          _id: { $dateToString: { format: "%Y-%m", date: { $ifNull: ["$paidAt", "$createdAt"] } } },
+          revenue: { $sum: "$totalAmount" },
+          bookings: { $sum: 1 }
         }
       },
       { $sort: { _id: 1 } },
       { $limit: 6 }
     ]).toArray();
 
-    res.send({
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthlyData = monthlyEarningsRaw.map(m => {
+      const parts = m._id ? m._id.split('-') : [];
+      const mIdx = parts[1] ? parseInt(parts[1], 10) - 1 : 0;
+      return {
+        month: monthNames[mIdx] || m._id,
+        revenue: m.revenue,
+        bookings: m.bookings,
+      };
+    });
+
+    // Category distribution
+    const catPipeline = [
+      { $match: ownerMatch },
+      { $group: { _id: '$category', count: { $sum: 1 } } }
+    ];
+    const catResult = await equipments.aggregate(catPipeline).toArray();
+    const categoryDistribution = catResult.map(c => ({ name: c._id || 'Equipment', value: c.count }));
+
+    const analyticsPayload = {
+      totalRevenue,
+      totalEarnings: totalRevenue,
+      totalListings: totalListed,
       totalListed,
-      pendingListed,
-      totalOwnerBookings,
       completedRentals,
-      totalEarnings,
-      monthlyEarnings,
+      totalBookings: totalOwnerBookings,
+      totalOwnerBookings,
+      pendingListed,
+      monthlyData,
+      monthlyEarnings: monthlyEarningsRaw,
+      categoryDistribution,
+    };
+
+    res.send({
+      ...analyticsPayload,
+      analytics: analyticsPayload,
     });
   } catch (error) {
+    console.error('Failed to fetch owner analytics:', error);
     res.status(500).send({ message: 'Failed to fetch owner analytics', error: error.message });
   }
 });
