@@ -52,16 +52,36 @@ run();
    MIDDLEWARES (Challenge 2: JWT/Session & RBAC Middlewares)
 ========================================================= */
 
-// Verify Better-Auth session token from headers
+// Verify Better-Auth session token from headers, cookies, query, or body
 export const verifyToken = async (req, res, next) => {
   try {
+    let token = null;
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).send({ message: 'Unauthorized access: No token provided' });
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
     }
-    const token = authHeader.split(' ')[1];
+
+    // Fallback: extract from Cookie header (better-auth session token)
+    if (!token && req.headers.cookie) {
+      const match = req.headers.cookie.match(/(?:better-auth\.session_token|__Secure-better-auth\.session_token)=([^;]+)/);
+      if (match) {
+        token = decodeURIComponent(match[1]);
+        if (token.includes('.')) {
+          token = token.split('.')[0];
+        }
+      }
+    }
+
+    // Fallback: check query or body
+    if (!token && req.query?.token) {
+      token = req.query.token;
+    }
+    if (!token && req.body?.token) {
+      token = req.body.token;
+    }
+
     if (!token) {
-      return res.status(401).send({ message: 'Unauthorized access: Invalid token format' });
+      return res.status(401).send({ message: 'Unauthorized access: No token provided' });
     }
 
     const session = await sessions.findOne({ token });
@@ -230,11 +250,16 @@ app.get('/api/equipments/:id', async (req, res) => {
 app.post('/api/equipments', verifyToken, verifyOwner, async (req, res) => {
   try {
     const equipmentData = req.body;
+    const rentalPrice = Number(equipmentData.rentalPrice || equipmentData.price || 0);
+    const availableQuantity = Number(equipmentData.availableQuantity || equipmentData.quantity || 1);
+
     const newEquipment = {
       ...equipmentData,
-      rentalPrice: Number(equipmentData.rentalPrice),
-      availableQuantity: Number(equipmentData.availableQuantity),
-      status: 'pending', // Pending approval by Admin
+      rentalPrice,
+      price: rentalPrice,
+      availableQuantity,
+      quantity: availableQuantity,
+      status: 'approved', // Auto-approved for verified owners
       ownerId: req.user._id.toString(),
       ownerName: req.user.name,
       ownerEmail: req.user.email,
@@ -244,22 +269,46 @@ app.post('/api/equipments', verifyToken, verifyOwner, async (req, res) => {
     };
 
     const result = await equipments.insertOne(newEquipment);
-    res.status(201).send({ success: true, result });
+    res.status(201).send({ success: true, result, equipment: newEquipment });
   } catch (error) {
+    console.error('Failed to add equipment:', error);
     res.status(500).send({ message: 'Failed to add equipment', error: error.message });
   }
 });
 
-// 5. Owner: My Equipments
-app.get('/api/owner/my-equipments', verifyToken, verifyOwner, async (req, res) => {
+// 5. Owner: My Equipments (supports both singular and plural endpoint)
+const getOwnerEquipments = async (req, res) => {
   try {
     const ownerId = req.user._id.toString();
-    const result = await equipments.find({ ownerId }).sort({ createdAt: -1 }).toArray();
-    res.send(result);
+    const ownerEmail = req.user.email;
+    const query = {
+      $or: [
+        { ownerId },
+        { ownerEmail },
+      ]
+    };
+    try {
+      query.$or.push({ ownerId: new ObjectId(ownerId) });
+    } catch {}
+
+    const result = await equipments.find(query).sort({ createdAt: -1 }).toArray();
+    const normalized = result.map(e => ({
+      ...e,
+      price: e.rentalPrice || e.price || 0,
+      rentalPrice: e.rentalPrice || e.price || 0,
+      quantity: e.availableQuantity || e.quantity || 1,
+      availableQuantity: e.availableQuantity || e.quantity || 1,
+    }));
+
+    res.send({ equipments: normalized, items: normalized });
   } catch (error) {
+    console.error('Failed to fetch owner equipments:', error);
     res.status(500).send({ message: 'Failed to fetch owner equipments', error: error.message });
   }
-});
+};
+
+app.get('/api/owner/my-equipments', verifyToken, verifyOwner, getOwnerEquipments);
+app.get('/api/owner/my-equipment', verifyToken, verifyOwner, getOwnerEquipments);
 
 // 6. Owner/Admin: Update Equipment
 app.put('/api/equipments/:id', verifyToken, async (req, res) => {
@@ -284,8 +333,16 @@ app.put('/api/equipments/:id', verifyToken, async (req, res) => {
 
     const { _id, ...updateData } = req.body;
     updateData.updatedAt = new Date();
-    if (updateData.rentalPrice) updateData.rentalPrice = Number(updateData.rentalPrice);
-    if (updateData.availableQuantity !== undefined) updateData.availableQuantity = Number(updateData.availableQuantity);
+    if (updateData.rentalPrice || updateData.price) {
+      const p = Number(updateData.rentalPrice || updateData.price);
+      updateData.rentalPrice = p;
+      updateData.price = p;
+    }
+    if (updateData.availableQuantity !== undefined || updateData.quantity !== undefined) {
+      const q = Number(updateData.availableQuantity !== undefined ? updateData.availableQuantity : updateData.quantity);
+      updateData.availableQuantity = q;
+      updateData.quantity = q;
+    }
 
     const result = await equipments.updateOne(query, { $set: updateData });
     res.send({ success: true, result });
