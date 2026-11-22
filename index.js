@@ -187,6 +187,7 @@ app.get('/api/equipments', async (req, res) => {
 
     res.send({
       items,
+      equipments: items,
       total,
       page: parseInt(page),
       totalPages: Math.ceil(total / parseInt(limit))
