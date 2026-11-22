@@ -30,12 +30,14 @@ const stripeKey = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder';
 const stripe = new Stripe(stripeKey);
 
 // MongoDB Client
-const uri = process.env.MONGODB_URI;
+const defaultUri = "mongodb://equip-rent-admin:EquipRent2026%23Secure@ac-m0gvdxt-shard-00-00.i3lu0gl.mongodb.net:27017,ac-m0gvdxt-shard-00-01.i3lu0gl.mongodb.net:27017,ac-m0gvdxt-shard-00-02.i3lu0gl.mongodb.net:27017/equip_rent_db?ssl=true&replicaSet=atlas-ccvxfd-shard-0&authSource=admin&retryWrites=true&w=majority";
+const uri = process.env.MONGODB_URI || defaultUri;
 const client = new MongoClient(uri);
 
 let db, users, sessions, equipments, bookings, payments, favorites;
 
 async function run() {
+  if (db && equipments) return;
   try {
     await client.connect();
     db = client.db(process.env.DB_NAME || 'equip_rent_db');
@@ -54,6 +56,14 @@ async function run() {
   }
 }
 run();
+
+// Ensure database connection for all serverless function invocations
+app.use(async (req, res, next) => {
+  if (!equipments || !db) {
+    await run();
+  }
+  next();
+});
 
 /* =========================================================
    MIDDLEWARES (Challenge 2: JWT/Session & RBAC Middlewares)
