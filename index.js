@@ -604,11 +604,24 @@ app.post('/api/bookings/create-checkout-session', verifyToken, async (req, res) 
     const bookingResult = await bookings.insertOne(bookingDoc);
     const bookingId = bookingResult.insertedId.toString();
 
+    const getClientBaseUrl = () => {
+      const origin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : null);
+      if (origin && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+        return origin;
+      }
+      if (process.env.CLIENT_URL && !process.env.CLIENT_URL.includes('localhost') && !process.env.CLIENT_URL.includes('127.0.0.1')) {
+        return process.env.CLIENT_URL;
+      }
+      return 'https://equip-rent-client-nine.vercel.app';
+    };
+
+    const clientBaseUrl = getClientBaseUrl();
+
     // Check if Stripe key is mock or real
     if (stripeKey.includes('sk_test_placeholder') || stripeKey.includes('Mock')) {
       // Mock payment redirect URL for development test flow
       return res.send({
-        url: `${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout/success?session_id=mock_session_${bookingId}&booking_id=${bookingId}`,
+        url: `${clientBaseUrl}/checkout/success?session_id=mock_session_${bookingId}&booking_id=${bookingId}`,
         sessionId: `mock_session_${bookingId}`,
         bookingId,
       });
@@ -639,8 +652,8 @@ app.post('/api/bookings/create-checkout-session', verifyToken, async (req, res) 
         userId: req.user._id.toString(),
         requiredQuantity: String(requiredQuantity),
       },
-      success_url: `${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout/success?session_id={CHECKOUT_SESSION_ID}&booking_id=${bookingId}`,
-      cancel_url: `${process.env.CLIENT_URL || 'http://localhost:3000'}/equipment/${equipmentId}?canceled=true`,
+      success_url: `${clientBaseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}&booking_id=${bookingId}`,
+      cancel_url: `${clientBaseUrl}/equipment/${equipmentId}?canceled=true`,
     });
 
     res.send({ url: session.url, sessionId: session.id, bookingId });
