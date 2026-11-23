@@ -527,14 +527,16 @@ app.post('/api/favorites', verifyToken, async (req, res) => {
 app.delete('/api/favorites/:id', verifyToken, async (req, res) => {
   try {
     const id = req.params.id;
-    let query;
+    const userId = req.user._id.toString();
+    const orConditions = [
+      { equipmentId: id, userId },
+      { _id: id, userId },
+    ];
     try {
-      query = { _id: new ObjectId(id), userId: req.user._id.toString() };
-    } catch {
-      query = { _id: id, userId: req.user._id.toString() };
-    }
+      orConditions.push({ _id: new ObjectId(id), userId });
+    } catch {}
 
-    const result = await favorites.deleteOne(query);
+    const result = await favorites.deleteOne({ $or: orConditions });
     res.send({ success: true, result });
   } catch (error) {
     res.status(500).send({ message: 'Failed to remove favorite', error: error.message });
